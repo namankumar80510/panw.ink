@@ -1,0 +1,100 @@
+/* Minimal Pawn.Ink brand, accessibility and reader overrides on top of
+   locally bundled Bootstrap 5 (no CDN, no remote fonts). */
+
+:root {
+  --pawn-brand: #1f2a44;
+  --pawn-accent: #9a3b2e;
+  --pawn-reader-size: 19px;
+  --pawn-reader-leading: 1.7;
+  --pawn-reader-width: 720px;
+  --pawn-serif: Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, "Noto Serif", serif;
+  --pawn-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+}
+
+[data-bs-theme="dark"] {
+  --pawn-brand: #c9d3ea;
+  --pawn-accent: #e08a7a;
+}
+
+/* Sepia: a small extension of Bootstrap's light color mode. */
+[data-pawn-theme="sepia"] {
+  --bs-body-bg: #f4ecd8;
+  --bs-body-color: #3b2f22;
+  --bs-secondary-bg: #ebe0c7;
+  --bs-tertiary-bg: #efe5cf;
+  --bs-border-color: #d6c7a6;
+  --bs-secondary-color: rgba(59, 47, 34, 0.75);
+  --bs-emphasis-color: #241a10;
+  --bs-link-color: #7a3b16;
+  --bs-link-hover-color: #5c2a0d;
+  --bs-link-color-rgb: 122, 59, 22;
+  --bs-link-hover-color-rgb: 92, 42, 13;
+}
+[data-pawn-theme="sepia"] .card,
+[data-pawn-theme="sepia"] .navbar,
+[data-pawn-theme="sepia"] .offcanvas,
+[data-pawn-theme="sepia"] .dropdown-menu,
+[data-pawn-theme="sepia"] .modal-content {
+  --bs-card-bg: #f8f1e1;
+  --bs-dropdown-bg: #f8f1e1;
+  --bs-offcanvas-bg: #f8f1e1;
+  --bs-modal-bg: #f8f1e1;
+}
+
+body {
+  font-family: var(--pawn-sans);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+#app { flex: 1 0 auto; display: flex; flex-direction: column; }
+main { flex: 1 0 auto; }
+
+.navbar-brand { font-family: var(--pawn-serif); font-weight: 700; letter-spacing: 0.01em; }
+.navbar-brand .bi { color: var(--pawn-accent); }
+
+.skip-link {
+  position: absolute; left: -9999px; top: 0.5rem; z-index: 2000;
+  padding: 0.5rem 1rem; background: var(--bs-body-bg); border: 2px solid var(--bs-primary);
+}
+.skip-link:focus { left: 0.5rem; }
+
+:focus-visible { outline: 3px solid var(--bs-primary); outline-offset: 2px; }
+
+.nonprod-banner {
+  background: repeating-linear-gradient(-45deg, #ffe08a, #ffe08a 12px, #ffd25c 12px, #ffd25c 24px);
+  color: #3a2c00; font-size: 0.875rem; text-align: center; padding: 0.25rem 0.5rem;
+}
+
+/* Reader text: its own width, size, leading and family. */
+.reader-text {
+  max-width: var(--pawn-reader-width);
+  margin-inline: auto;
+  font-family: var(--pawn-serif);
+  font-size: var(--pawn-reader-size);
+  line-height: var(--pawn-reader-leading);
+  overflow-wrap: anywhere;
+}
+[data-pawn-sans] .reader-text { font-family: var(--pawn-sans); }
+.reader-text p { margin-bottom: 1em; }
+.reader-text hr { margin: 2em auto; width: 30%; }
+
+.page-narrow { max-width: 34rem; }
+.page-text { max-width: 46rem; }
+
+.empty-state { border: 1px dashed var(--bs-border-color); border-radius: var(--bs-border-radius-lg); padding: 2rem 1rem; text-align: center; color: var(--bs-secondary-color); }
+.empty-state .bi { font-size: 2rem; display: block; margin-bottom: 0.5rem; }
+
+.rail-title { font-family: var(--pawn-serif); }
+
+[data-pawn-reduced-motion] *, [data-pawn-reduced-motion] *::before, [data-pawn-reduced-motion] *::after {
+  transition: none !important; animation: none !important; scroll-behavior: auto !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; }
+}
+
+/* Dashboard */
+.dash-sidebar { width: 15rem; }
+@media (max-width: 991.98px) { .dash-sidebar { width: auto; } }
+.dash-sidebar .nav-link.active { font-weight: 600; }

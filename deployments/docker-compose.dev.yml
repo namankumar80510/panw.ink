@@ -1,0 +1,84 @@
+# Disposable development/test services for Pawn.Ink. NOT for production.
+#
+# Production runs MariaDB and Redis as host services (see docs/RUNBOOK.md).
+# Ports are deliberately non-default so this stack never collides with
+# MariaDB/Redis already running on the host. Override with the env vars below.
+#
+#   make dev-db          # start (never deletes volumes)
+#   make dev-db-stop     # stop, keeping volumes
+#
+# Never run `docker compose down -v` against anything but a disposable stack.
+name: pawn-ink-dev
+
+services:
+  mariadb:
+    image: mariadb:11.4.13
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${PAWN_DEV_DB_ROOT_PASSWORD:-pawn-dev-root}
+      MARIADB_INITDB_SKIP_TZINFO: "1"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
+      - --binlog-format=MIXED
+    ports:
+      - "127.0.0.1:${PAWN_DEV_DB_PORT:-13306}:3306"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./dev-db-init.sql:/docker-entrypoint-initdb.d/01-pawn-ink.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7.4.11-alpine
+    restart: unless-stopped
+    # AOF persistence with everysec fsync, and noeviction: the analytics buffer
+    # must never be silently evicted (IMPLEMENTATION.md §10.1).
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - noeviction
+    ports:
+      - "127.0.0.1:${PAWN_DEV_REDIS_PORT:-16379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  minio:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    restart: unless-stopped
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${PAWN_DEV_MINIO_USER:-pawnminio}
+      MINIO_ROOT_PASSWORD: ${PAWN_DEV_MINIO_PASSWORD:-pawnminio-dev-secret}
+    ports:
+      - "127.0.0.1:${PAWN_DEV_MINIO_PORT:-19000}:9000"
+      - "127.0.0.1:${PAWN_DEV_MINIO_CONSOLE_PORT:-19001}:9001"
+    volumes:
+      - minio-data:/data
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PAWN_DEV_SMTP_PORT:-11025}:1025"
+      - "127.0.0.1:${PAWN_DEV_MAILPIT_UI_PORT:-18025}:8025"
+
+volumes:
+  mariadb-data:
+  redis-data:
+  minio-data:

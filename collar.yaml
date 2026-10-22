@@ -1,0 +1,91 @@
+# Collar configuration for Pawn.Ink (IMPLEMENTATION.md §1.1).
+#
+# - App namespace `pawn`, database alias `content` -> ${APP_DATABASE} (pawn_ink).
+# - Explicit collection allowlist (`include`): anything not listed is invisible
+#   to Collar. Browser sessions, one-time tokens, mail outbox, OAuth state,
+#   Patreon secrets and raw analytics are NEVER listed here.
+# - `null` (or absent) rule = superusers only; "" = public.
+# - Ordinary owners/authors/moderators are app users (content.users), never
+#   Collar superusers. Superusers are restricted operator accounts.
+# - Secrets come from the environment via ${VAR}; nothing secret is committed.
+version: 1
+
+server:
+  dsn: ${COLLAR_DSN}
+  migrateDSN: ${COLLAR_ADMIN_DSN}
+  maxOpenConns: 32
+  maxWriteConns: 16
+
+system:
+  database: ${COLLAR_SYSTEM_DATABASE}
+
+apps:
+  pawn:
+    databases:
+      content:
+        name: ${APP_DATABASE}
+        bigintAsString: true
+        include:
+          - users
+          - admin_user_summaries
+          - audit_logs
+          - site_settings
+
+    auth:
+      globalUsers: false
+      collections:
+        content.users:
+          identityFields: [email]
+          passwordField: password_hash
+          activeField: is_active
+          hashAlgorithm: argon2id
+          minPasswordLength: 12
+          # Generic self-registration stays off: Pawn.Ink's custom
+          # /api/v1/pawn/x/auth/register enforces reader-only defaults and
+          # queues verification mail.
+          allowRegister: false
+
+    collections:
+      # Users are never listed or mutated through the generic API. Profile
+      # edits, roles, suspension and deletion go through custom commands.
+      content.users:
+        rules:
+          list: null
+          view: null
+          create: null
+          update: null
+          delete: null
+        fields:
+          email: { hidden: true }
+          state: { readOnly: true }
+          is_active: { readOnly: true }
+          role: { readOnly: true }
+          email_verified_at: { readOnly: true }
+          deleted_at: { hidden: true }
+
+      # Read-only, staff-safe user summary view for /admin/users.
+      content.admin_user_summaries:
+        primaryKey: [id]
+        rules:
+          list: '@request.auth.role = "owner" || @request.auth.role = "moderator"'
+          view: '@request.auth.role = "owner" || @request.auth.role = "moderator"'
+          create: null
+          update: null
+          delete: null
+
+      content.audit_logs:
+        defaultSort: -created_at
+        rules:
+          list: '@request.auth.role = "owner"'
+          view: '@request.auth.role = "owner"'
+          create: null
+          update: null
+          delete: null
+
+      content.site_settings:
+        rules:
+          list: '@request.auth.role = "owner"'
+          view: '@request.auth.role = "owner"'
+          create: null
+          update: null
+          delete: null

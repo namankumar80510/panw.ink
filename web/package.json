@@ -1,0 +1,31 @@
+{
+  "name": "pawn-ink-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pawn.Ink reader and studio/admin SPAs (Parcel + TypeScript + Mithril + Bootstrap 5).",
+  "license": "UNLICENSED",
+  "browserslist": "> 0.5%, last 2 versions, Firefox ESR, not dead",
+  "scripts": {
+    "build": "parcel build index.html dashboard.html --dist-dir dist --public-url / --no-source-maps --no-cache",
+    "watch": "parcel watch index.html dashboard.html --dist-dir dist --public-url / --no-hmr",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "size": "node scripts/size-report.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@popperjs/core": "2.11.8",
+    "bootstrap": "5.3.8",
+    "bootstrap-icons": "1.13.2",
+    "mithril": "2.3.8"
+  },
+  "devDependencies": {
+    "@types/bootstrap": "5.2.10",
+    "@types/mithril": "2.2.9",
+    "parcel": "2.16.4",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  }
+}

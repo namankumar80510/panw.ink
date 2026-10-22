@@ -1,0 +1,37 @@
+# Secrets and local config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Build outputs
+/bin/
+/dist/
+web/dist/*
+!web/dist/.gitkeep
+web/.parcel-cache/
+coverage/
+*.out
+*.test
+
+# Dependencies and caches
+node_modules/
+web/node_modules/
+.parcel-cache/
+
+# Uploads, backups, local data
+/uploads/
+/backups/
+/var/
+
+# Test artifacts
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+web/tests/__screenshots__/
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store

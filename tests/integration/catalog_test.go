@@ -155,10 +155,17 @@ func TestHiddenContentIs404(t *testing.T) {
 			t.Errorf("listing includes %s", s)
 		}
 	}
-	// Content tables are not exposed through Collar's generic API at all.
-	for _, tbl := range []string{"entry_revisions", "entries", "works"} {
-		if r := reader.do("GET", "/api/v1/pawn/content/"+tbl, nil); r.Status != http.StatusNotFound {
-			t.Errorf("native %s: %d", tbl, r.Status)
+	// Readers reach no catalogue rows through Collar's generic API: the
+	// ownership rules leave their lists empty (anonymous and verified alike).
+	for _, cl := range []*client{c, reader} {
+		for _, tbl := range []string{"entry_revisions", "entries", "works", "studio_entries", "pen_names", "assets"} {
+			r := cl.do("GET", "/api/v1/pawn/content/"+tbl+"?perPage=50", nil)
+			if r.Status == http.StatusOK && len(r.json(t)["items"].([]any)) != 0 {
+				t.Errorf("native %s exposes rows to a reader: %s", tbl, r.Body)
+			}
+			if strings.Contains(string(r.Body), "markdown") || strings.Contains(string(r.Body), "rendered_html") {
+				t.Errorf("native %s leaks bodies", tbl)
+			}
 		}
 	}
 }

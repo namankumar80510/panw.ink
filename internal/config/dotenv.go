@@ -53,7 +53,7 @@ func LoadDotEnv(path string) error {
 // so CLI tools that run without a complete Pawn.Ink config still agree with
 // the server on database names.
 func ExportCollarDefaults() {
-	for k, v := range map[string]string{"APP_DATABASE": "pawn_ink", "COLLAR_SYSTEM_DATABASE": "pawn_ink_collar"} {
+	for k, v := range map[string]string{"APP_DATABASE": "pawn_ink", "COLLAR_SYSTEM_DATABASE": "pawn_ink_collar", "S3_REGION": "us-east-1"} {
 		if s, ok := os.LookupEnv(k); !ok || strings.TrimSpace(s) == "" {
 			_ = os.Setenv(k, v)
 		}

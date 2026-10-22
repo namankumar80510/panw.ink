@@ -92,3 +92,10 @@ func Daily(name, kind, prefix string) Schedule {
 		return prefix + ":" + b.Format("2006-01-02")
 	}}
 }
+
+// Every is a fixed-width UTC schedule keyed "<prefix>:<RFC3339 bucket start>".
+func Every(name, kind, prefix string, every time.Duration) Schedule {
+	return Schedule{Name: name, Kind: kind, Every: every, Key: func(b time.Time) string {
+		return prefix + ":" + b.UTC().Format("2006-01-02T15:04Z")
+	}}
+}

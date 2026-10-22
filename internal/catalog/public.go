@@ -113,23 +113,42 @@ const workVisible = "w.deleted_at IS NULL AND w.visibility IN ('listed','unliste
 
 const cardColumns = "w.id, w.slug, w.kind, w.title, w.subtitle, w.synopsis, w.publication_status, w.age_rating," +
 	" w.content_warnings_json, w.public_word_count, w.public_entry_count, w.first_public_at, w.last_public_update_at," +
-	" w.is_featured, p.slug, p.name, g.slug, g.name"
+	" w.is_featured, p.slug, p.name, g.slug, g.name, w.cover_asset_id"
 
 func (p *Public) cardFrom() string {
 	return " FROM " + p.T.T("works") + " w JOIN " + p.T.T("pen_names") + " p ON p.id = w.pen_name_id JOIN " + p.T.T("genres") + " g ON g.id = w.primary_genre_id"
 }
 
-func scanCard(rows interface{ Scan(...any) error }) (*WorkCard, uint64, error) {
+// coverURLs keeps only covers whose asset is ready.
+func (p *Public) coverURLs(ctx context.Context, cards []*WorkCard, covers []sql.NullInt64) error {
+	for i, c := range covers {
+		if !c.Valid {
+			continue
+		}
+		var state string
+		if err := p.DB.QueryRowContext(ctx, "SELECT state FROM "+p.T.T("assets")+" WHERE id = ?", c.Int64).Scan(&state); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		if state == "ready" {
+			u := auth.Base + "/assets/" + strconv.FormatInt(c.Int64, 10) + "/card"
+			cards[i].CoverURL = &u
+		}
+	}
+	return nil
+}
+
+func scanCard(rows interface{ Scan(...any) error }) (*WorkCard, uint64, sql.NullInt64, error) {
 	var c WorkCard
 	var id uint64
 	var warnings sql.NullString
 	var first, last db.Time
+	var cover sql.NullInt64
 	err := rows.Scan(&id, &c.Slug, &c.Kind, &c.Title, &c.Subtitle, &c.Synopsis, &c.PublicationStatus, &c.AgeRating,
-		&warnings, &c.WordCount, &c.PublicEntryCount, &first, &last, &c.Featured, &c.Author.Slug, &c.Author.Name, &c.Genre.Slug, &c.Genre.Name)
+		&warnings, &c.WordCount, &c.PublicEntryCount, &first, &last, &c.Featured, &c.Author.Slug, &c.Author.Name, &c.Genre.Slug, &c.Genre.Name, &cover)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, cover, err
 	}
-	return finishCard(&c, id, warnings, first, last), id, nil
+	return finishCard(&c, id, warnings, first, last), id, cover, nil
 }
 
 // cards runs a card query and attaches approved tags.
@@ -139,15 +158,19 @@ func (p *Public) cards(ctx context.Context, query string, args ...any) ([]*WorkC
 		return nil, nil, fmt.Errorf("catalog: cards: %w", err)
 	}
 	defer rows.Close()
-	out, ids := []*WorkCard{}, []uint64{}
+	out, ids, covers := []*WorkCard{}, []uint64{}, []sql.NullInt64{}
 	for rows.Next() {
-		c, id, err := scanCard(rows)
+		c, id, cover, err := scanCard(rows)
 		if err != nil {
 			return nil, nil, fmt.Errorf("catalog: scan card: %w", err)
 		}
-		out, ids = append(out, c), append(ids, id)
+		out, ids, covers = append(out, c), append(ids, id), append(covers, cover)
 	}
 	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	rows.Close()
+	if err := p.coverURLs(ctx, out, covers); err != nil {
 		return nil, nil, err
 	}
 	return out, ids, p.attachTags(ctx, out, ids)
@@ -370,9 +393,10 @@ func (p *Public) works(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type rowT struct {
-		card *WorkCard
-		id   uint64
-		key  string
+		card  *WorkCard
+		id    uint64
+		key   string
+		cover sql.NullInt64
 	}
 	var got []rowT
 	for rows.Next() {
@@ -381,8 +405,9 @@ func (p *Public) works(w http.ResponseWriter, r *http.Request) {
 		var warnings sql.NullString
 		var first, last db.Time
 		var sortVal sql.RawBytes
+		var cover sql.NullInt64
 		err := rows.Scan(&id, &c.Slug, &c.Kind, &c.Title, &c.Subtitle, &c.Synopsis, &c.PublicationStatus, &c.AgeRating,
-			&warnings, &c.WordCount, &c.PublicEntryCount, &first, &last, &c.Featured, &c.Author.Slug, &c.Author.Name, &c.Genre.Slug, &c.Genre.Name, &sortVal)
+			&warnings, &c.WordCount, &c.PublicEntryCount, &first, &last, &c.Featured, &c.Author.Slug, &c.Author.Name, &c.Genre.Slug, &c.Genre.Name, &cover, &sortVal)
 		if err != nil {
 			rows.Close()
 			httpx.WriteError(w, r, err)
@@ -394,7 +419,7 @@ func (p *Public) works(w http.ResponseWriter, r *http.Request) {
 			_ = t.Scan(k)
 			k = t.Time.Format(time.RFC3339Nano)
 		}
-		got = append(got, rowT{card: finishCard(&c, id, warnings, first, last), id: id, key: k})
+		got = append(got, rowT{card: finishCard(&c, id, warnings, first, last), id: id, key: k, cover: cover})
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
@@ -410,8 +435,13 @@ func (p *Public) works(w http.ResponseWriter, r *http.Request) {
 	}
 	cards := make([]*WorkCard, len(got))
 	ids := make([]uint64, len(got))
+	covers := make([]sql.NullInt64, len(got))
 	for i, g := range got {
-		cards[i], ids[i] = g.card, g.id
+		cards[i], ids[i], covers[i] = g.card, g.id, g.cover
+	}
+	if err := p.coverURLs(r.Context(), cards, covers); err != nil {
+		httpx.WriteError(w, r, err)
+		return
 	}
 	if err := p.attachTags(r.Context(), cards, ids); err != nil {
 		httpx.WriteError(w, r, err)
@@ -570,8 +600,9 @@ func (p *Public) findWork(ctx context.Context, slug string) (*WorkDetail, *workR
 	var warnings sql.NullString
 	var first, last, completed db.Time
 	var visibility string
+	var cover sql.NullInt64
 	err := p.DB.QueryRowContext(ctx, q, slug).Scan(&id, &d.Slug, &d.Kind, &d.Title, &d.Subtitle, &d.Synopsis, &d.PublicationStatus, &d.AgeRating,
-		&warnings, &d.WordCount, &d.PublicEntryCount, &first, &last, &d.Featured, &d.WorkCard.Author.Slug, &d.WorkCard.Author.Name, &d.Genre.Slug, &d.Genre.Name,
+		&warnings, &d.WordCount, &d.PublicEntryCount, &first, &last, &d.Featured, &d.WorkCard.Author.Slug, &d.WorkCard.Author.Name, &d.Genre.Slug, &d.Genre.Name, &cover,
 		&d.FullSynopsis, &d.Language, &completed, &visibility, &authorID, &d.Author.Bio)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil, p.notFoundOrMoved(ctx, "work", "/fiction/"+slug)
@@ -580,6 +611,9 @@ func (p *Public) findWork(ctx context.Context, slug string) (*WorkDetail, *workR
 		return nil, nil, fmt.Errorf("catalog: work: %w", err)
 	}
 	finishCard(&d.WorkCard, id, warnings, first, last)
+	if err := p.coverURLs(ctx, []*WorkCard{&d.WorkCard}, []sql.NullInt64{cover}); err != nil {
+		return nil, nil, err
+	}
 	if completed.Valid {
 		d.CompletedAt = &completed.Time
 	}

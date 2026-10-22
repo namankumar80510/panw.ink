@@ -82,8 +82,13 @@ type Config struct {
 	MaxEarlyDays             int
 	AllowTestEntitlements    bool
 	CSPReportOnly            bool
-	WebDistDir               string // development only: serve the Parcel output from disk
-	AssetOrigins             []string
+	WebDistDir               string   // development only: serve the Parcel output from disk
+	AssetOrigins             []string // extra img-src/connect-src origins; the S3 origin is added automatically
+	S3Endpoint               string
+	S3Region                 string
+	S3Bucket                 string
+	S3AccessKey              string
+	S3SecretKey              string
 	LogLevel                 string
 }
 
@@ -107,6 +112,7 @@ func Load() (*Config, error) {
 	for k, v := range map[string]string{
 		"APP_DATABASE":           cfg.AppDatabase,
 		"COLLAR_SYSTEM_DATABASE": cfg.SystemDatabase,
+		"S3_REGION":              cfg.S3Region,
 	} {
 		if _, ok := os.LookupEnv(k); !ok {
 			_ = os.Setenv(k, v)
@@ -332,6 +338,22 @@ func Parse(lookup func(string) (string, bool)) (*Config, error) {
 		p.fail("WEB_DIST_DIR", "must be unset in production (the embedded UI is always used)")
 	}
 	c.AssetOrigins = splitCSV(p.str("ASSET_ORIGINS", ""))
+	c.S3Endpoint = strings.TrimRight(p.str("S3_ENDPOINT", ""), "/")
+	c.S3Region = p.str("S3_REGION", "us-east-1")
+	c.S3Bucket = p.str("S3_BUCKET", "")
+	c.S3AccessKey = p.str("S3_ACCESS_KEY", "")
+	c.S3SecretKey = p.str("S3_SECRET_KEY", "")
+	if u, err := url.Parse(c.S3Endpoint); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || (u.Path != "" && u.Path != "/") {
+		p.fail("S3_ENDPOINT", "want the object store origin, e.g. https://s3.eu-west-1.amazonaws.com")
+	} else {
+		if c.Env == EnvProduction && u.Scheme != "https" {
+			p.fail("S3_ENDPOINT", "production requires https")
+		}
+		c.AssetOrigins = append(c.AssetOrigins, u.Scheme+"://"+u.Host)
+	}
+	if c.S3Bucket == "" || c.S3AccessKey == "" || c.S3SecretKey == "" {
+		p.fail("S3_BUCKET", "S3_BUCKET, S3_ACCESS_KEY and S3_SECRET_KEY are required (development uses the Compose MinIO)")
+	}
 	c.LogLevel = strings.ToLower(p.str("LOG_LEVEL", "info"))
 	switch c.LogLevel {
 	case "debug", "info", "warn", "error":

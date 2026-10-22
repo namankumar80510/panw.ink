@@ -14,6 +14,10 @@ func env(over map[string]string) func(string) (string, bool) {
 		"TOKEN_ENCRYPTION_KEY": strings.Repeat("0f", 32),
 		"RANKING_HMAC_KEY":     strings.Repeat("c", 64),
 		"ANALYTICS_HMAC_KEY":   strings.Repeat("d", 64),
+		"S3_ENDPOINT":          "http://127.0.0.1:19000",
+		"S3_BUCKET":            "b",
+		"S3_ACCESS_KEY":        "a",
+		"S3_SECRET_KEY":        "s",
 	}
 	for k, v := range over {
 		base[k] = v
@@ -43,6 +47,7 @@ func TestParseRejects(t *testing.T) {
 		"short secret":               {"CSRF_HMAC_KEY": "short"},
 		"bad encryption key":         {"TOKEN_ENCRYPTION_KEY": "not-32-bytes"},
 		"production over http":       {"APP_ENV": "production", "COLLAR_JWT_SECRET": strings.Repeat("j", 40)},
+		"missing object store":       {"S3_BUCKET": ""},
 		"production public bind":     {"APP_ENV": "production", "APP_BASE_URL": "https://pawn.ink", "HTTP_ADDR": "0.0.0.0:14021", "COLLAR_JWT_SECRET": strings.Repeat("j", 40)},
 		"production flush interval":  {"APP_ENV": "production", "APP_BASE_URL": "https://pawn.ink", "ANALYTICS_FLUSH_INTERVAL": "60s", "COLLAR_JWT_SECRET": strings.Repeat("j", 40)},
 		"test entitlements in prod":  {"APP_ENV": "production", "APP_BASE_URL": "https://pawn.ink", "ALLOW_TEST_ENTITLEMENTS": "true", "COLLAR_JWT_SECRET": strings.Repeat("j", 40)},
@@ -66,7 +71,7 @@ func TestParseRejects(t *testing.T) {
 func TestProductionOK(t *testing.T) {
 	c, err := Parse(env(map[string]string{
 		"APP_ENV": "production", "APP_BASE_URL": "https://pawn.ink", "COLLAR_JWT_SECRET": strings.Repeat("j", 40),
-		"TRUSTED_PROXY_CIDRS": "127.0.0.1/32, ::1",
+		"TRUSTED_PROXY_CIDRS": "127.0.0.1/32, ::1", "S3_ENDPOINT": "https://s3.example.com",
 	}))
 	if err != nil {
 		t.Fatal(err)

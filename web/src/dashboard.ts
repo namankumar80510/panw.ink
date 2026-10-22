@@ -5,13 +5,16 @@ import './styles/app.css';
 import m from 'mithril';
 import { Shell } from './admin/shell';
 import * as pages from './admin/pages';
+import * as studio from './admin/studio';
+import { Editor } from './admin/editor';
+import { Schedule } from './admin/schedule';
 import { config } from './stores/config';
 import { prefs } from './stores/prefs';
 import { session, type User } from './stores/session';
 import { loginHref } from './utils/redirect';
 
 type Gate = (u: User) => boolean;
-const studio: Gate = (u) => u.permissions.studio;
+const canStudio: Gate = (u) => u.permissions.studio;
 const staff: Gate = (u) => u.permissions.admin;
 const owner: Gate = (u) => u.role === 'owner';
 
@@ -25,7 +28,7 @@ function route(c: () => m.Component, allowed: Gate): m.RouteResolver {
       }
       return undefined;
     },
-    render: () => m(Shell, { allowed }, m(c, { key: m.route.get() })),
+    render: () => m(Shell, { allowed }, [m(c, { key: m.route.get() }), m(studio.CompleteConfirm, { key: 'complete-confirm' })]),
   };
 }
 
@@ -35,22 +38,22 @@ prefs.apply();
 m.route.prefix = '';
 void config.load();
 m.route(document.getElementById('app')!, '/studio', {
-  '/studio': route(soon('Overview'), studio),
-  '/studio/works': route(soon('Works'), studio),
-  '/studio/works/new': route(soon('New work'), studio),
-  '/studio/works/:id/edit': route(soon('Edit work'), studio),
-  '/studio/works/:id/entries': route(soon('Entries'), studio),
-  '/studio/entries/:id/edit': route(soon('Edit entry'), studio),
-  '/studio/entries/:id/schedule': route(soon('Schedule entry'), studio),
-  '/studio/collections': route(soon('Collections'), studio),
-  '/studio/authors': route(soon('Pen names'), studio),
-  '/studio/analytics': route(soon('Analytics'), studio),
-  '/studio/analytics/:workId': route(soon('Work analytics'), studio),
-  '/studio/comments': route(soon('Comments'), studio),
-  '/studio/reviews': route(soon('Reviews'), studio),
-  '/studio/media': route(soon('Media'), studio),
+  '/studio': route(studio.Overview, canStudio),
+  '/studio/works': route(studio.WorksList, canStudio),
+  '/studio/works/new': route(studio.NewWork, canStudio),
+  '/studio/works/:id/edit': route(studio.WorkEdit, canStudio),
+  '/studio/works/:id/entries': route(studio.Entries, canStudio),
+  '/studio/entries/:id/edit': route(Editor, canStudio),
+  '/studio/entries/:id/schedule': route(Schedule, canStudio),
+  '/studio/collections': route(studio.Collections, canStudio),
+  '/studio/authors': route(studio.PenNames, canStudio),
+  '/studio/media': route(studio.Media, canStudio),
+  '/studio/analytics': route(soon('Analytics'), canStudio),
+  '/studio/analytics/:workId': route(soon('Work analytics'), canStudio),
+  '/studio/comments': route(soon('Comments'), canStudio),
+  '/studio/reviews': route(soon('Reviews'), canStudio),
   '/studio/integrations/patreon': route(soon('Patreon'), owner),
-  '/studio/settings': route(soon('Settings'), studio),
+  '/studio/settings': route(soon('Settings'), canStudio),
   '/admin': route(pages.UsersPage, staff),
   '/admin/users': route(pages.UsersPage, staff),
   '/admin/reports': route(soon('Reports'), staff),
@@ -59,6 +62,6 @@ m.route(document.getElementById('app')!, '/studio', {
   '/admin/jobs': route(pages.Placeholder('Jobs', 'Job administration requires a separate operator (Collar superuser) session.'), owner),
   '/admin/audit': route(pages.AuditPage, owner),
   '/admin/system': route(soon('System'), owner),
-  '/studio/:rest...': route(pages.Placeholder('Not found', 'No such studio page.'), studio),
+  '/studio/:rest...': route(pages.Placeholder('Not found', 'No such studio page.'), canStudio),
   '/admin/:rest...': route(pages.Placeholder('Not found', 'No such admin page.'), staff),
 });

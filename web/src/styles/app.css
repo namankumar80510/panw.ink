@@ -110,3 +110,9 @@ main[tabindex="-1"]:focus-visible { outline: none; }
 .entry-body hr { border: 0; text-align: center; opacity: 1; }
 .entry-body hr::after { content: "⁂"; color: var(--bs-secondary-color); }
 .entry-body a { overflow-wrap: anywhere; }
+
+/* Studio Markdown editor: the whole pane is editable and readable. */
+.studio-editor .cm-editor { min-height: 60vh; font-size: 1rem; }
+.studio-editor .cm-editor.cm-focused { outline: none; }
+.studio-editor .cm-scroller { font-family: var(--pawn-serif); line-height: 1.6; padding: 0.75rem 1rem; }
+.studio-editor .cm-content { max-width: 46rem; }

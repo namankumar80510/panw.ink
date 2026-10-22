@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -39,6 +40,7 @@ import (
 	"github.com/namankumar80510/panw.ink/internal/config"
 	"github.com/namankumar80510/panw.ink/internal/db"
 	"github.com/namankumar80510/panw.ink/internal/httpx"
+	"github.com/namankumar80510/panw.ink/internal/objstore"
 	"github.com/namankumar80510/panw.ink/internal/seed"
 	"github.com/namankumar80510/panw.ink/migrations"
 )
@@ -134,9 +136,20 @@ func run(m *testing.M) int {
 		"SESSION_HMAC_KEY": randHex(32), "CSRF_HMAC_KEY": randHex(32), "TOKEN_ENCRYPTION_KEY": randHex(32),
 		"RANKING_HMAC_KEY": randHex(32), "ANALYTICS_HMAC_KEY": randHex(32),
 		"REDIS_URL": envOr("PAWN_TEST_REDIS_URL", "redis://127.0.0.1:16379/15"), "LOG_LEVEL": "error",
+		"S3_ENDPOINT": envOr("PAWN_TEST_S3_ENDPOINT", "http://127.0.0.1:19000"), "S3_REGION": "us-east-1", "S3_BUCKET": "pawn-ink-test",
+		"S3_ACCESS_KEY": envOr("PAWN_TEST_S3_ACCESS_KEY", "pawnminio"), "S3_SECRET_KEY": envOr("PAWN_TEST_S3_SECRET_KEY", "pawnminio-dev-secret"),
+		"MAX_EARLY_DAYS": "30",
 	}
 	for k, v := range env {
 		_ = os.Setenv(k, v)
+	}
+	store, err := objstore.New(objstore.Config{Endpoint: env["S3_ENDPOINT"], Bucket: env["S3_BUCKET"], AccessKey: env["S3_ACCESS_KEY"], SecretKey: env["S3_SECRET_KEY"]})
+	if err == nil {
+		err = store.EnsureBucket(ctx)
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "integration tests need the dev MinIO (make dev-db):", err)
+		return 1
 	}
 	if code := collar.Main([]string{"migrate"}, collar.Options{ConfigPath: env["COLLAR_CONFIG"]}); code != 0 {
 		fmt.Fprintln(os.Stderr, "collar migrate failed:", code)
@@ -342,3 +355,5 @@ func userID(t *testing.T, email string) uint64 {
 	}
 	return id
 }
+
+func urlq(s string) string { return url.QueryEscape(s) }

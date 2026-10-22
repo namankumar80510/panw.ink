@@ -105,9 +105,10 @@ func (s *Server) securityHeaders(w http.ResponseWriter) {
 // Bootstrap and Bootstrap Icons locally; no CDN), plus configured asset
 // origins for cover images.
 func buildCSP(cfg *config.Config) string {
-	img := "'self' data:"
+	img, connect := "'self' data:", "'self'"
 	for _, o := range cfg.AssetOrigins {
 		img += " " + o
+		connect += " " + o // browser uploads PUT straight to presigned object-store URLs
 	}
 	return strings.Join([]string{
 		"default-src 'self'",
@@ -115,7 +116,7 @@ func buildCSP(cfg *config.Config) string {
 		"style-src 'self'",
 		"font-src 'self'",
 		"img-src " + img,
-		"connect-src 'self'",
+		"connect-src " + connect,
 		"object-src 'none'",
 		"base-uri 'self'",
 		"form-action 'self'",

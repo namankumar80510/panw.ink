@@ -18,9 +18,11 @@ import (
 	"github.com/namankumar80510/panw.ink/internal/catalog"
 	"github.com/namankumar80510/panw.ink/internal/config"
 	"github.com/namankumar80510/panw.ink/internal/db"
+	"github.com/namankumar80510/panw.ink/internal/objstore"
 	"github.com/namankumar80510/panw.ink/internal/redis"
 	"github.com/namankumar80510/panw.ink/internal/server"
 	"github.com/namankumar80510/panw.ink/internal/site"
+	"github.com/namankumar80510/panw.ink/internal/studio"
 	"github.com/namankumar80510/panw.ink/migrations"
 	"github.com/namankumar80510/panw.ink/web"
 )
@@ -33,6 +35,7 @@ type API struct {
 	Handler http.Handler
 	Collar  *collar.App
 	Bridge  *auth.Bridge
+	Studio  *studio.Service
 	Tables  db.Tables
 	Redis   *redis.Client
 }
@@ -104,6 +107,16 @@ func NewAPI(ctx context.Context, cfg *config.Config, opts Options) (*API, error)
 		_ = capp.Close()
 		return nil, fmt.Errorf("boot: mount auth routes: %w", err)
 	}
+	store, err := objstore.New(objstore.Config{Endpoint: cfg.S3Endpoint, Region: cfg.S3Region, Bucket: cfg.S3Bucket, AccessKey: cfg.S3AccessKey, SecretKey: cfg.S3SecretKey})
+	if err != nil {
+		_ = capp.Close()
+		return nil, err
+	}
+	st := &studio.Service{DB: capp.DB(), T: t, Jobs: capp.Jobs(), Store: store, Now: opts.Clock, MaxEarlyDays: cfg.MaxEarlyDays, Log: log}
+	if err := st.Mount(routes); err != nil {
+		_ = capp.Close()
+		return nil, fmt.Errorf("boot: mount studio routes: %w", err)
+	}
 	pub := &catalog.Public{DB: capp.DB(), T: t, Now: opts.Clock, CursorKey: cfg.RankingHMACKey}
 	if err := pub.Mount(routes); err != nil {
 		_ = capp.Close()
@@ -131,7 +144,7 @@ func NewAPI(ctx context.Context, cfg *config.Config, opts Options) (*API, error)
 		Health: healthFunc(capp.DB(), t, rc),
 		Log:    log,
 	})
-	return &API{Handler: h, Collar: capp, Bridge: bridge, Tables: t, Redis: rc}, nil
+	return &API{Handler: h, Collar: capp, Bridge: bridge, Studio: st, Tables: t, Redis: rc}, nil
 }
 
 // healthFunc: the application database must be reachable and migrated to at

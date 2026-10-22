@@ -12,10 +12,12 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/xmfunew/collar"
 
 	"github.com/namankumar80510/panw.ink/internal/boot"
+	"github.com/namankumar80510/panw.ink/internal/catalog"
 	"github.com/namankumar80510/panw.ink/internal/config"
 	"github.com/namankumar80510/panw.ink/internal/db"
 	"github.com/namankumar80510/panw.ink/internal/jobs"
@@ -59,11 +61,15 @@ func run() error {
 	cleanup := &jobs.Cleanup{DB: w.DB(), Tables: t}
 	w.HandleJob(mail.JobKind, mailer.HandleJob)
 	w.HandleJob(jobs.KindCleanupExpiredAuth, cleanup.ExpiredAuth)
+	rollups := &catalog.RollupJobs{DB: w.DB(), T: t}
+	w.HandleJob(catalog.KindUpdateWorkRollups, rollups.UpdateWork)
+	w.HandleJob(catalog.KindRefreshRollups, rollups.Sweep)
 
 	sched := &jobs.Scheduler{
 		DB: w.DB(), Tables: t, Jobs: w.Jobs(), Log: log,
 		Schedules: []jobs.Schedule{
 			jobs.Daily("cleanup_expired_auth", jobs.KindCleanupExpiredAuth, "authcleanup"),
+			jobs.Every("refresh_rollups", catalog.KindRefreshRollups, "rollups", 10*time.Minute),
 		},
 	}
 	var wg sync.WaitGroup

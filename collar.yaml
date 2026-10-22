@@ -30,6 +30,22 @@ apps:
           - admin_user_summaries
           - audit_logs
           - site_settings
+          # Catalogue (studio reads + safe metadata PATCH; creates are commands)
+          - pen_names
+          - works
+          - volumes
+          - entries
+          - entry_revisions
+          - entry_access
+          - studio_entries
+          - studio_revisions
+          - collections
+          - collection_items
+          - genres
+          - tags
+          - work_tags
+          - assets
+          - asset_variants
 
     auth:
       globalUsers: false
@@ -44,6 +60,22 @@ apps:
           # /api/v1/pawn/x/auth/register enforces reader-only defaults and
           # queues verification mail.
           allowRegister: false
+
+    # Browser uploads: presign -> PUT -> confirm (Collar enforces size/type),
+    # then POST /api/v1/pawn/x/studio/assets registers the key and the server
+    # decodes and re-encodes it. Raw uploads are never served.
+    storage:
+      uploads:
+        target: media
+        prefix: "uploads/{user}/{yyyy}/{mm}/"
+        maxSize: 5MB
+        contentTypes: ["image/jpeg", "image/png", "image/webp"]
+        uploadExpiry: 15m
+        downloadExpiry: 5m
+        rules:
+          upload: '@request.auth.role = "author" || @request.auth.role = "owner"'
+          download: null
+          delete: null
 
     collections:
       # Users are never listed or mutated through the generic API. Profile
@@ -89,3 +121,182 @@ apps:
           create: null
           update: null
           delete: null
+
+      # ---- Studio catalogue (IMPLEMENTATION.md §7.5) -------------------------
+      # Authors/owners see and edit only rows they own (owner_user_id
+      # projection, §5.6). Readers and guests get empty lists / 404. Creates,
+      # scheduling, ordering, tags and anything atomic are custom commands
+      # under /api/v1/pawn/x/studio; protected columns are readOnly here.
+      content.pen_names:
+        timestamps: { created: created_at, updated: updated_at }
+        rules:
+          list: &own '(@request.auth.role = "author" || @request.auth.role = "owner") && owner_user_id = @request.auth.id'
+          view: *own
+          create: null
+          update: '(@request.auth.role = "author" || @request.auth.role = "owner") && owner_user_id = @request.auth.id && state = "active" && (avatar_asset_id = null || (avatar_asset_id.owner_user_id = @request.auth.id && avatar_asset_id.state = "ready"))'
+          delete: null
+        fields:
+          owner_user_id: { readOnly: true }
+          slug: { readOnly: true }
+          state: { readOnly: true }
+          patreon_creator_connection_id: { readOnly: true }
+
+      content.works:
+        timestamps: { created: created_at, updated: updated_at }
+        defaultSort: -updated_at
+        rules:
+          list: *own
+          view: *own
+          create: null
+          # Moderation-hidden works are frozen for authors (the rule runs on the
+          # old and the new row); "completed" needs the complete command, which
+          # sets completed_at; covers must be the caller's validated assets.
+          update: '(@request.auth.role = "author" || @request.auth.role = "owner") && owner_user_id = @request.auth.id && visibility != "hidden" && deleted_at = null && (publication_status != "completed" || completed_at != null) && (cover_asset_id = null || (cover_asset_id.owner_user_id = @request.auth.id && cover_asset_id.state = "ready"))'
+          delete: null
+        fields:
+          pen_name_id: { readOnly: true }
+          owner_user_id: { readOnly: true }
+          kind: { readOnly: true }
+          slug: { readOnly: true }
+          first_public_at: { readOnly: true }
+          last_public_update_at: { readOnly: true }
+          completed_at: { readOnly: true }
+          is_featured: { readOnly: true }
+          public_entry_count: { readOnly: true }
+          public_word_count: { readOnly: true }
+          rollups_at: { readOnly: true }
+          deleted_at: { readOnly: true }
+        relations:
+          pen_name_id: { target: content.pen_names }
+
+      content.volumes:
+        timestamps: { created: created_at, updated: updated_at }
+        rules:
+          list: *own
+          view: *own
+          create: null
+          update: *own
+          delete: null
+        fields:
+          work_id: { readOnly: true }
+          work_kind: { readOnly: true }
+          owner_user_id: { readOnly: true }
+          number: { readOnly: true }
+        relations:
+          work_id: { target: content.works }
+
+      content.entries:
+        timestamps: { created: created_at, updated: updated_at }
+        rules:
+          list: *own
+          view: *own
+          create: null
+          update: *own
+          delete: null
+        fields:
+          work_id: { readOnly: true }
+          work_kind: { readOnly: true }
+          owner_user_id: { readOnly: true }
+          volume_id: { readOnly: true }
+          ordinal: { readOnly: true }
+          slug: { readOnly: true }
+          workflow: { readOnly: true }
+          early_at: { readOnly: true }
+          public_at: { readOnly: true }
+          current_draft_revision_id: { readOnly: true }
+          published_revision_id: { readOnly: true }
+          last_edited_at: { readOnly: true }
+        relations:
+          work_id: { target: content.works }
+          volume_id: { target: content.volumes }
+
+      # Revision bodies: owners only; immutable (no writes for anyone but
+      # operators). Readers never reach drafts through the generic API.
+      content.entry_revisions:
+        rules: { list: *own, view: *own, create: null, update: null, delete: null }
+        relations:
+          entry_id: { target: content.entries }
+
+      content.entry_access:
+        rules: { list: *own, view: *own, create: null, update: null, delete: null }
+
+      content.studio_entries:
+        primaryKey: [id]
+        defaultSort: ordinal
+        rules: { list: *own, view: *own }
+        relations:
+          work_id: { target: content.works }
+          volume_id: { target: content.volumes }
+
+      content.studio_revisions:
+        primaryKey: [id]
+        defaultSort: -version
+        rules: { list: *own, view: *own }
+
+      content.collections:
+        timestamps: { created: created_at, updated: updated_at }
+        rules:
+          list: *own
+          view: *own
+          create: null
+          update: '(@request.auth.role = "author" || @request.auth.role = "owner") && owner_user_id = @request.auth.id && visibility != "hidden" && (cover_asset_id = null || (cover_asset_id.owner_user_id = @request.auth.id && cover_asset_id.state = "ready"))'
+          delete: null
+        fields:
+          pen_name_id: { readOnly: true }
+          owner_user_id: { readOnly: true }
+          slug: { readOnly: true }
+        relations:
+          pen_name_id: { target: content.pen_names }
+
+      content.collection_items:
+        rules:
+          list: '(@request.auth.role = "author" || @request.auth.role = "owner") && collection_id.owner_user_id = @request.auth.id'
+          view: '(@request.auth.role = "author" || @request.auth.role = "owner") && collection_id.owner_user_id = @request.auth.id'
+
+      content.genres:
+        rules: { list: "", view: "" }
+
+      content.tags:
+        rules:
+          list: 'state = "approved" || @request.auth.role = "owner" || @request.auth.role = "moderator"'
+          view: 'state = "approved" || @request.auth.role = "owner" || @request.auth.role = "moderator"'
+
+      content.work_tags:
+        rules:
+          list: '(@request.auth.role = "author" || @request.auth.role = "owner") && work_id.owner_user_id = @request.auth.id'
+          view: '(@request.auth.role = "author" || @request.auth.role = "owner") && work_id.owner_user_id = @request.auth.id'
+
+      content.assets:
+        rules:
+          list: *own
+          view: *own
+          create: null
+          update: *own
+          delete: null
+        fields:
+          owner_user_id: { readOnly: true }
+          storage_key: { readOnly: true }
+          mime: { readOnly: true }
+          byte_size: { readOnly: true }
+          width: { readOnly: true }
+          height: { readOnly: true }
+          sha256: { readOnly: true }
+          state: { readOnly: true }
+          error_code: { readOnly: true }
+          deleted_at: { readOnly: true }
+
+      content.asset_variants:
+        rules: { list: *own, view: *own }
+
+# S3-compatible bucket (MinIO in development). Secrets come from the
+# environment; nothing secret is committed.
+storage:
+  media:
+    endpoint: ${S3_ENDPOINT}
+    region: ${S3_REGION}
+    bucket: ${S3_BUCKET}
+    accessKey: ${S3_ACCESS_KEY}
+    secretKey: ${S3_SECRET_KEY}
+    signature: v4
+    addressing: path
+    stat: head

@@ -179,13 +179,13 @@ type Resolved struct {
 type sessionRow struct {
 	id, userID      uint64
 	accessCT        []byte
-	accessExpires   time.Time
-	expires         time.Time
-	lastSeen        time.Time
+	accessExpires   db.Time
+	expires         db.Time
+	lastSeen        db.Time
 	email, display  string
 	handle          sql.NullString
 	role, state, tz string
-	verifiedAt      sql.NullTime
+	verifiedAt      db.Time
 }
 
 // Resolve validates the cookie of r and returns its viewer and a fresh
@@ -214,7 +214,7 @@ func (b *Bridge) Resolve(ctx context.Context, r *http.Request, clientIP string) 
 		return Resolved{} // transient: anonymous for this request, keep the cookie
 	}
 	now := b.now()
-	if !now.Before(s.expires) {
+	if !now.Before(s.expires.Time) {
 		return Resolved{ClearCookie: true}
 	}
 	if s.state != "active" {
@@ -223,7 +223,7 @@ func (b *Bridge) Resolve(ctx context.Context, r *http.Request, clientIP string) 
 	}
 
 	var access string
-	if now.Add(refreshSkew).Before(s.accessExpires) {
+	if now.Add(refreshSkew).Before(s.accessExpires.Time) {
 		pt, err := b.sealer.Open(s.accessCT, adFor("access", s.userID))
 		if err != nil {
 			b.log.Warn("session access token undecryptable; revoking", "session_id", s.id)
@@ -242,7 +242,7 @@ func (b *Bridge) Resolve(ctx context.Context, r *http.Request, clientIP string) 
 		}
 	}
 
-	if now.Sub(s.lastSeen) > lastSeenEvery {
+	if now.Sub(s.lastSeen.Time) > lastSeenEvery {
 		_, _ = b.db.ExecContext(ctx, "UPDATE "+b.t.T("browser_sessions")+" SET last_seen_at = ? WHERE id = ?", now, s.id)
 	}
 	return Resolved{
@@ -276,8 +276,8 @@ func (b *Bridge) refresh(ctx context.Context, sessionID, userID uint64, clientIP
 
 	var (
 		accessCT, refreshCT []byte
-		accessExp, expires  time.Time
-		revoked             sql.NullTime
+		accessExp, expires  db.Time
+		revoked             db.Time
 	)
 	err = tx.QueryRowContext(ctx, "SELECT access_token_ciphertext, access_expires_at, refresh_token_ciphertext, expires_at, revoked_at FROM "+
 		b.t.T("browser_sessions")+" WHERE id = ? FOR UPDATE", sessionID).Scan(&accessCT, &accessExp, &refreshCT, &expires, &revoked)
@@ -288,10 +288,10 @@ func (b *Bridge) refresh(ctx context.Context, sessionID, userID uint64, clientIP
 		return "", fmt.Errorf("auth: lock session: %w", err)
 	}
 	now := b.now()
-	if revoked.Valid || !now.Before(expires) {
+	if revoked.Valid || !now.Before(expires.Time) {
 		return "", errSessionGone
 	}
-	if now.Add(refreshSkew).Before(accessExp) {
+	if now.Add(refreshSkew).Before(accessExp.Time) {
 		pt, err := b.sealer.Open(accessCT, adFor("access", userID))
 		if err != nil {
 			return "", errSessionGone
@@ -433,7 +433,7 @@ func (b *Bridge) createSession(ctx context.Context, userID uint64, collarSession
 func (b *Bridge) loadViewer(ctx context.Context, userID uint64) (*Viewer, error) {
 	v := &Viewer{UserID: userID}
 	var handle sql.NullString
-	var verified sql.NullTime
+	var verified db.Time
 	err := b.db.QueryRowContext(ctx, "SELECT email, display_name, handle, role, timezone, email_verified_at FROM "+b.t.T("users")+" WHERE id = ?", userID).
 		Scan(&v.Email, &v.DisplayName, &handle, &v.Role, &v.Timezone, &verified)
 	if err != nil {
@@ -450,7 +450,7 @@ func (b *Bridge) Rotate(ctx context.Context, sessionID uint64) (string, time.Tim
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	var expires time.Time
+	var expires db.Time
 	if err := b.db.QueryRowContext(ctx, "SELECT expires_at FROM "+b.t.T("browser_sessions")+" WHERE id = ?", sessionID).Scan(&expires); err != nil {
 		return "", time.Time{}, fmt.Errorf("auth: rotate: %w", err)
 	}
@@ -459,7 +459,7 @@ func (b *Bridge) Rotate(ctx context.Context, sessionID uint64) (string, time.Tim
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("auth: rotate: %w", err)
 	}
-	return raw, expires, nil
+	return raw, expires.Time, nil
 }
 
 // CSRFFor exposes the CSRF token of a raw cookie value (login/rotate responses).
@@ -502,9 +502,9 @@ func (b *Bridge) RevokeAllForUser(ctx context.Context, userID, keep uint64, clie
 // logged, never surfaced: the browser can no longer reach those tokens.
 func (b *Bridge) revokeQuiet(ctx context.Context, sessionID, userID uint64, clientIP, ua string) {
 	var accessCT, refreshCT []byte
-	var accessExp time.Time
+	var accessExp db.Time
 	err := db.InTx(ctx, b.db, func(tx *sql.Tx) error {
-		var revoked sql.NullTime
+		var revoked db.Time
 		err := tx.QueryRowContext(ctx, "SELECT access_token_ciphertext, refresh_token_ciphertext, access_expires_at, revoked_at FROM "+
 			b.t.T("browser_sessions")+" WHERE id = ? FOR UPDATE", sessionID).Scan(&accessCT, &refreshCT, &accessExp, &revoked)
 		if err != nil {
@@ -525,7 +525,7 @@ func (b *Bridge) revokeQuiet(ctx context.Context, sessionID, userID uint64, clie
 		return
 	}
 	access := ""
-	if b.now().Add(refreshSkew).Before(accessExp) {
+	if b.now().Add(refreshSkew).Before(accessExp.Time) {
 		if pt, err := b.sealer.Open(accessCT, adFor("access", userID)); err == nil {
 			access = string(pt)
 		}
@@ -605,9 +605,11 @@ func (b *Bridge) ListSessions(ctx context.Context, userID, current uint64) ([]Se
 	for rows.Next() {
 		var s SessionInfo
 		var id uint64
-		if err := rows.Scan(&id, &s.CreatedAt, &s.LastSeenAt, &s.ExpiresAt, &s.Device); err != nil {
+		var created, seen, exp db.Time
+		if err := rows.Scan(&id, &created, &seen, &exp, &s.Device); err != nil {
 			return nil, fmt.Errorf("auth: sessions: %w", err)
 		}
+		s.CreatedAt, s.LastSeenAt, s.ExpiresAt = created.Time, seen.Time, exp.Time
 		s.ID, s.Current = strconv.FormatUint(id, 10), id == current
 		out = append(out, s)
 	}

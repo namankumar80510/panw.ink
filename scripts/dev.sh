@@ -19,8 +19,8 @@ cmd_env() {
   jwt="$(rand_hex 32)"; sess="$(rand_hex 32)"; csrf="$(rand_hex 32)"
   enc="$(rand_hex 32)"; rank="$(rand_hex 32)"; ana="$(rand_hex 32)"
   sed \
-    -e "s#^COLLAR_DSN=.*#COLLAR_DSN=pawn_app:pawn-app-dev@tcp(127.0.0.1:13306)/?parseTime=true\&loc=UTC#" \
-    -e "s#^COLLAR_ADMIN_DSN=.*#COLLAR_ADMIN_DSN=pawn_migrator:pawn-migrator-dev@tcp(127.0.0.1:13306)/?parseTime=true\&loc=UTC#" \
+    -e "s#^COLLAR_DSN=.*#COLLAR_DSN='pawn_app:pawn-app-dev@tcp(127.0.0.1:13306)/'#" \
+    -e "s#^COLLAR_ADMIN_DSN=.*#COLLAR_ADMIN_DSN='pawn_migrator:pawn-migrator-dev@tcp(127.0.0.1:13306)/'#" \
     -e "s#^COLLAR_JWT_SECRET=.*#COLLAR_JWT_SECRET=${jwt}#" \
     -e "s#^SESSION_HMAC_KEY=.*#SESSION_HMAC_KEY=${sess}#" \
     -e "s#^CSRF_HMAC_KEY=.*#CSRF_HMAC_KEY=${csrf}#" \

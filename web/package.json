@@ -6,8 +6,8 @@
   "license": "UNLICENSED",
   "browserslist": "> 0.5%, last 2 versions, Firefox ESR, not dead",
   "scripts": {
-    "build": "parcel build index.html dashboard.html --dist-dir dist --public-url / --no-source-maps --no-cache",
-    "watch": "parcel watch index.html dashboard.html --dist-dir dist --public-url / --no-hmr",
+    "build": "parcel build index.html dashboard.html --dist-dir dist --public-url / --no-source-maps --no-cache && node scripts/keep-dist.mjs",
+    "watch": "node scripts/keep-dist.mjs && parcel watch index.html dashboard.html --dist-dir dist --public-url / --no-hmr",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "size": "node scripts/size-report.mjs"
@@ -26,6 +26,13 @@
     "@types/mithril": "2.2.9",
     "parcel": "2.16.4",
     "typescript": "5.9.3",
-    "vitest": "3.2.4"
+    "vitest": "4.1.12"
+  },
+  "allowScripts": {
+    "@parcel/watcher": false,
+    "@swc/core": false,
+    "esbuild": false,
+    "lmdb": false,
+    "msgpackr-extract": false
   }
 }

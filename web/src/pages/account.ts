@@ -26,9 +26,11 @@ function fmt(ts: string, tz?: string): string {
   }
 }
 
-function timeZones(): string[] {
+/** IANA zones for the picker. Browsers omit "UTC" from supportedValuesOf, but it is the account default. */
+function timeZones(current: string): string[] {
   const fn = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf;
-  return fn ? fn('timeZone') : ['UTC'];
+  const zones = fn ? fn('timeZone') : [];
+  return ['UTC', ...zones.filter((z) => z !== 'UTC'), ...(current && current !== 'UTC' && !zones.includes(current) ? [current] : [])];
 }
 
 function ProfileCard(): m.Component<{ user: User }> {
@@ -57,7 +59,7 @@ function ProfileCard(): m.Component<{ user: User }> {
           m('.mb-3', [
             m('label.form-label', { for: 'timezone' }, 'Time zone'),
             m('select.form-select', { id: 'timezone', value: s.tz, onchange: (e: Event) => (s.tz = (e.target as HTMLSelectElement).value), class: s.fields.timezone ? 'is-invalid' : '' },
-              timeZones().map((z) => m('option', { value: z }, z))),
+              timeZones(s.tz).map((z) => m('option', { value: z, selected: z === s.tz }, z))),
             m('.form-text', 'Release dates are shown in this time zone. The server always schedules in UTC.'),
           ]),
           submitButton('Save profile', s.busy),
@@ -175,7 +177,7 @@ export function SettingsPage(): m.Component {
           m('li.nav-item', m(m.route.Link, { href: '/settings', class: 'nav-link active', 'aria-current': 'page' }, 'Account')),
           m('li.nav-item', m(m.route.Link, { href: '/settings/patreon', class: 'nav-link' }, 'Patreon')),
         ]),
-        u ? [m(ProfileCard, { user: u, key: u.id }), m(PasswordCard), m(SessionsCard, { user: u })] : null,
+        u ? [m(ProfileCard, { user: u }), m(PasswordCard), m(SessionsCard, { user: u })] : null,
         m(PrefsCard),
       ]);
     },

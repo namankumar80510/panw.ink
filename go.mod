@@ -2,6 +2,8 @@ module github.com/namankumar80510/panw.ink
 
 go 1.26.0
 
+toolchain go1.26.10
+
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect

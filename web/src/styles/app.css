@@ -98,3 +98,8 @@ main { flex: 1 0 auto; }
 .dash-sidebar { width: 15rem; }
 @media (max-width: 991.98px) { .dash-sidebar { width: auto; } }
 .dash-sidebar .nav-link.active { font-weight: 600; }
+
+/* <main> receives programmatic focus after navigation (for screen readers);
+   it is not an interactive control, so no focus ring. */
+main[tabindex="-1"]:focus,
+main[tabindex="-1"]:focus-visible { outline: none; }

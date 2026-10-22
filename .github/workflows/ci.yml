@@ -1,0 +1,81 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  GOPRIVATE: github.com/xmfunew/collar
+  GOFLAGS: -mod=readonly
+
+jobs:
+  web:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+          include-hidden-files: true
+
+  go:
+    runs-on: ubuntu-24.04
+    needs: web
+    services:
+      mariadb:
+        image: mariadb:11.4.13
+        env:
+          MARIADB_ROOT_PASSWORD: ci-root
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+      redis:
+        image: redis:7.4.11-alpine
+        ports: ["6379:6379"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.10"
+      - name: Private Collar module access
+        # COLLAR_READ_TOKEN: a read-only token for github.com/xmfunew/collar,
+        # stored as a repository secret. Never echo it or commit it.
+        env:
+          COLLAR_READ_TOKEN: ${{ secrets.COLLAR_READ_TOKEN }}
+        run: |
+          git config --global credential.helper store
+          printf 'https://x-access-token:%s@github.com\n' "$COLLAR_READ_TOKEN" > ~/.git-credentials
+          chmod 600 ~/.git-credentials
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+      - run: test -z "$(gofmt -l cmd internal migrations tests web/embed.go)"
+      - run: go vet ./... && go vet -tags integration ./tests/...
+      - run: go test ./...
+      - name: Integration tests
+        env:
+          PAWN_TEST_DSN: root:ci-root@tcp(127.0.0.1:3306)/
+          PAWN_TEST_REDIS_URL: redis://127.0.0.1:6379/15
+        run: go test -race -tags integration -count=1 ./tests/integration/...
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+      - run: make build-go

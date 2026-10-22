@@ -1,0 +1,40 @@
+# /etc/systemd/system/pawn-ink-worker.service — review before installing.
+# Binaries live in /srv/pawn-ink/current (a symlink to a versioned release),
+# secrets in /etc/pawn-ink/pawn-ink.env (0640 root:pawn-ink).
+[Unit]
+Description=Pawn.Ink worker (Collar jobs, scheduler, analytics flush)
+After=network-online.target mariadb.service redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pawn-ink
+Group=pawn-ink
+WorkingDirectory=/srv/pawn-ink/current
+EnvironmentFile=/etc/pawn-ink/pawn-ink.env
+ExecStart=/srv/pawn-ink/current/bin/pawn-ink-worker
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+# Hardening (the process needs no local writes: assets go to object storage).
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+ReadOnlyPaths=/srv/pawn-ink
+
+[Install]
+WantedBy=multi-user.target

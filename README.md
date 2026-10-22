@@ -14,7 +14,8 @@ Proprietary application code. There is no open-source license.
 |---|---|---|
 | 0 | Scaffold: Collar embedding, route boundary, embedded Parcel SPAs, dev stack, CI, deploy examples | done |
 | 1 | Auth: Collar app auth, encrypted cookie bridge, CSRF, registration/verify/reset, CLI owner bootstrap | done |
-| 2+ | Catalogue, studio, library, Patreon, analytics, ranking, moderation, QA | not started |
+| 2 | Catalogue model, sanitized rendering, public reader API, reading shell, fixtures | done |
+| 3+ | Studio, library, Patreon, analytics, ranking, moderation, QA | not started |
 
 Test evidence: [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md).
 
@@ -54,6 +55,7 @@ make deps          # go mod download + npm ci
 make migrate       # Goose (pawn_ink) + collar migrate (pawn_ink_collar) + collar config check
 make build-web     # Parcel build into web/dist (Go serves it from disk via WEB_DIST_DIR)
 make dev           # Parcel watch + API on http://localhost:14021 + worker
+make seed-dev      # optional: §16 demo catalogue + fixture accounts (tests/fixtures/README.md)
 make owner OWNER_EMAIL=you@example.com   # one-time owner bootstrap (prompts for a password)
 ```
 

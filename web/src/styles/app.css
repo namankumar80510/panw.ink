@@ -103,3 +103,10 @@ main { flex: 1 0 auto; }
    it is not an interactive control, so no focus ring. */
 main[tabindex="-1"]:focus,
 main[tabindex="-1"]:focus-visible { outline: none; }
+
+/* Entry body typography (server-sanitized HTML). */
+.entry-body h2, .entry-body h3, .entry-body h4 { font-family: inherit; margin-top: 1.6em; }
+.entry-body blockquote { border-left: 3px solid var(--bs-border-color); padding-left: 1em; color: var(--bs-secondary-color); }
+.entry-body hr { border: 0; text-align: center; opacity: 1; }
+.entry-body hr::after { content: "⁂"; color: var(--bs-secondary-color); }
+.entry-body a { overflow-wrap: anywhere; }

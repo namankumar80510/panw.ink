@@ -8,6 +8,8 @@ import * as pub from './pages/public';
 import * as auth from './pages/auth';
 import * as account from './pages/account';
 import * as stat from './pages/static';
+import { WorkPage } from './pages/work';
+import { ReaderPage } from './pages/reader';
 
 type Factory = () => m.Component;
 
@@ -51,20 +53,18 @@ function page(c: Factory, opts: { auth?: boolean } = {}): m.RouteResolver {
   };
 }
 
-const detail = (label: string) => page(pub.DetailPlaceholder(label));
-
 export const routes: Record<string, m.RouteResolver> = {
   '/': page(pub.HomePage),
   '/discover': page(pub.DiscoverPage),
   '/novels': page(pub.NovelsPage),
   '/stories': page(pub.StoriesPage),
   '/collections': page(pub.CollectionsPage),
-  '/collections/:slug': detail('Collection'),
-  '/authors/:slug': detail('Pen name'),
-  '/fiction/:workSlug': detail('Work'),
-  '/fiction/:workSlug/ch/:entrySlug': detail('Chapter'),
-  '/stories/:workSlug/read': detail('Story'),
-  '/reviews/:workSlug': detail('Reviews'),
+  '/collections/:slug': page(pub.CollectionPage),
+  '/authors/:slug': page(pub.AuthorPage),
+  '/fiction/:workSlug': page(WorkPage),
+  '/fiction/:workSlug/ch/:entrySlug': page(ReaderPage('novel')),
+  '/stories/:workSlug/read': page(ReaderPage('short_story')),
+  '/reviews/:workSlug': page(account.placeholderAccountPage('Reviews', 'star', 'Reviews arrive with the reader library and community features.')),
   '/search': page(pub.SearchPage),
   '/support': page(stat.SupportPage),
   '/about': page(stat.AboutPage),

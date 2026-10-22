@@ -1,4 +1,4 @@
-# API reference (Phases 0–1)
+# API reference (Phases 0–2)
 
 There are two contracts; never mix them:
 
@@ -59,3 +59,28 @@ Permissions are UI hints; every endpoint enforces its own.
 
 Collar superuser/admin APIs (`/api/v1/admin/*`, `/api/v1/pawn/collections`,
 `/api/v1/pawn/ui`) return 403 to every app user, including the owner.
+
+## Catalogue (Phase 2) — all anonymous, `GET`
+
+Access is computed from timestamps per request: `public` (now ≥ public_at),
+`early` (early_at ≤ now < public_at), `upcoming` (before early_at/public_at).
+Drafts, archived entries and draft/hidden works are `404 NOT_FOUND`, the same
+as absent ones.
+
+| Path | Params | Returns | Cache |
+|---|---|---|---|
+| `/genres` | – | enabled genres | public 300 s |
+| `/tags` | `q?` | approved tags only | public 300 s |
+| `/home` | – | `featured`, `short_reads`, `completed`, `ongoing_novels`, `recently_updated` (≤ 8 cards each, honest empties) | public 60 s |
+| `/works` | `kind, genre, tags (≤5, intersection), status, q (≤100), sort=latest\|newest\|title, min_words, max_words, max_minutes, limit ≤ 50, cursor` | `WorkCard[]`, `meta.next_cursor` (HMAC-signed keyset; reuse with other filters → `400 INVALID_CURSOR`) | public 60 s |
+| `/works/{slug}` | – | work detail, author, approved tags, `rating.state = insufficient_data`, `start`, `next_release`, collections | public 60 s |
+| `/works/{slug}/toc` | – | released entries: ordinal, title, volume, dates, `access`, word count; never bodies | public 30 s |
+| `/works/{slug}/entries/{entrySlug}` | – | `EntryBody` with `body_html` when public (or entitled early); otherwise `403 EARLY_ACCESS_REQUIRED` / `403 ENTRY_UPCOMING` with metadata in `details` | public 60 s when public, else `private, no-store` |
+| `/stories/{slug}/read` | – | the single entry of a short story (404 for novels) | as above |
+| `/authors/{slug}` | – | pen name + listed works | public 60 s |
+| `/collections` | – | listed anthologies with ≥ 1 public story | public 60 s |
+| `/collections/{slug}` | – | anthology + its public stories in order | public 60 s |
+| `/search` | `q (1–100), type=all\|works\|authors\|collections, limit ≤ 50` | `{works, authors, collections}`; FULLTEXT boolean mode with operators stripped, plus title substring | public 30 s |
+
+Slug redirects: `404 MOVED` with `details.location` (DECISIONS D-017).
+`WorkCard` = `{id, slug, kind, title, subtitle, synopsis (≤300 chars), author{slug,name}, genre{slug,name}, tags[], publication_status, age_rating, content_warnings[], word_count, read_minutes, public_entry_count, first_public_at, last_public_update_at, featured, cover_url}`.

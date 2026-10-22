@@ -130,7 +130,7 @@ function SessionsCard(): m.Component<{ user: User }> {
   };
 }
 
-const PrefsCard: m.Component = {
+export const PrefsCard: m.Component = {
   view: () => {
     const p = prefs.value;
     const range = (id: string, label: string, min: number, max: number, step: number, value: number, set: (n: number) => void, unit = '') =>

@@ -25,6 +25,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -38,16 +39,19 @@ import (
 	"github.com/namankumar80510/panw.ink/internal/config"
 	"github.com/namankumar80510/panw.ink/internal/db"
 	"github.com/namankumar80510/panw.ink/internal/httpx"
+	"github.com/namankumar80510/panw.ink/internal/seed"
 	"github.com/namankumar80510/panw.ink/migrations"
 )
 
 const origin = "http://pawn.test"
 
 var (
-	api    *boot.API
-	srv    *httptest.Server
-	sqlDB  *sql.DB
-	tables db.Tables
+	// clockOffset shifts the API's release clock (tests of time-based access).
+	clockOffset atomic.Int64
+	api         *boot.API
+	srv         *httptest.Server
+	sqlDB       *sql.DB
+	tables      db.Tables
 )
 
 func repoRoot() string {
@@ -152,6 +156,7 @@ func run(m *testing.M) int {
 	api, err = boot.NewAPI(ctx, cfg, boot.Options{
 		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 		AuthLimit: &limits,
+		Clock:     func() time.Time { return time.Now().Add(time.Duration(clockOffset.Load())) },
 		WebFS: fstest.MapFS{
 			"index.html":      {Data: []byte("<!doctype html><title>reader</title>")},
 			"dashboard.html":  {Data: []byte("<!doctype html><title>dashboard</title>")},
@@ -164,6 +169,10 @@ func run(m *testing.M) int {
 	}
 	defer api.Close()
 	sqlDB, tables = api.Collar.DB(), api.Tables
+	if err := seed.Run(ctx, appConn, tables, time.Now(), ""); err != nil {
+		fmt.Fprintln(os.Stderr, "seed:", err)
+		return 1
+	}
 	srv = httptest.NewServer(api.Handler)
 	defer srv.Close()
 	return m.Run()

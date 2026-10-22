@@ -27,3 +27,23 @@ pending migrations with destructive DDL unless `--allow-destructive
 All timestamps are `DATETIME(6)` UTC. Collar's pools return them as text;
 scan them with `internal/db.Time` (DECISIONS D-005). Valuable references use
 `ON DELETE RESTRICT`.
+
+## 00002_catalogue, 00003_entry_revision_pointers
+
+| Table | Purpose | Key constraints |
+|---|---|---|
+| `assets` | Uploaded image metadata (validation pipeline in Phase 3) | JPEG/PNG/WebP ≤ 5 MB |
+| `pen_names` | Public identities; many per owner | slug pattern, `UNIQUE(id, owner_user_id)` for ownership FKs |
+| `author_collaborators` | Future invited collaborators | PK (pen_name_id, user_id) |
+| `genres` | Seeded list (§5.2) | one primary genre per work |
+| `tags`, `work_tags` | Moderated tags; only `approved` are public | intersection filtering |
+| `works` | Novel or short story | `kind` immutable in practice; `(pen_name_id, owner_user_id)` → pen_names; FULLTEXT(title, synopsis); listing rollups (D-016) |
+| `volumes` | Optional novel volumes | `work_kind='novel'` via FK to works(id, kind) |
+| `entries` | Chapters, or the single story text | short story ⇒ ordinal 1 only; volume belongs to the same work; release CHECKs; ownership FK |
+| `entry_revisions` | Immutable Markdown + sanitized HTML + counts | `(entry_id, version)` unique; ≤ 2 MB; ownership FK to entries |
+| `collections`, `collection_items` | Anthologies of short stories | items must be `short_story` |
+| `slug_redirects` | Old → canonical paths | no self-redirects |
+
+00003 adds `entries.(current_draft_revision_id|published_revision_id, id) →
+entry_revisions(id, entry_id)`, so a pointer can only name a revision of the
+same entry.

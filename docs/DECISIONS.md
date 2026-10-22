@@ -126,3 +126,44 @@ owner. Operator superusers are created separately with
 `toolchain go1.26.10` because govulncheck reported 32 reachable standard-library
 vulnerabilities in 1.26.0 and none in 1.26.10. Raise the toolchain line for
 each security patch release.
+
+## D-016 · Listing rollups vs. access (Phase 2)
+`works.public_entry_count`, `public_word_count` and `last_public_update_at`
+are rollups that order and annotate listings. `catalog.RefreshRollups`
+recomputes them; Phase 3 adds the periodic/at-release job. **Access never
+reads them.** Entry access, TOC states and whether a work appears in listings
+(`first_public_at <= now`) are computed from timestamps on every request.
+Without the job, a chapter still becomes readable at `public_at`; at worst a
+card's word count lags until the next refresh. Corrections to released text
+never move `public_at`, so they cannot bump "recently updated" (PUB-08).
+
+## D-017 · Slug redirects answered as `404 MOVED`
+When a slug is missing but `slug_redirects` has the old path, the custom API
+returns `404 {"error":{"code":"MOVED","details":{"location":"/fiction/new"}}}`.
+The SPA replaces its URL (`replaceState`). A real 3xx is avoided because
+`fetch` would follow it silently; the API never sets `Location`.
+
+## D-018 · Lock error codes
+Early-window entries return `403 EARLY_ACCESS_REQUIRED` and pre-early entries
+return `403 ENTRY_UPCOMING`. Both carry public metadata only (title, ordinal,
+dates, neighbours) in `details`, never `body_html`. Locked responses are
+`private, no-store`; fully public bodies are `public, max-age=60`. Drafts,
+archived entries and hidden/draft works are indistinguishable 404s.
+
+## D-019 · Database-level content invariants
+`entries.work_kind` / `volumes.work_kind` / `collection_items.work_kind`
+reference `works(id, kind)` through composite FKs. CHECKs enforce: one entry
+at ordinal 1 for short stories, volumes only for novels, anthologies only of
+short stories, `public_at` plus a published revision for released entries,
+and `early_at <= public_at` within 30 days. Ownership projections
+(`owner_user_id`) must match the parent through composite FKs. Revision
+pointers must name a revision of the same entry (00003). Revision
+immutability is service-enforced: there is no write path that updates
+`entry_revisions`. Triggers were avoided, because binary-logged production
+servers may require SUPER to create them.
+
+## D-020 · Catalogue content stays off Collar's generic API (for now)
+Phase 2 adds no catalogue tables to `collar.yaml`, so they return 404 through
+the native API. Phase 3 exposes them to the studio with ownership rules and
+read-only fields, and adds tests that native list/expand/realtime cannot reach
+drafts or bodies.

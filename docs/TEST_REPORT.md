@@ -1,5 +1,34 @@
 # Test report
 
+## Phase 2 · 2026-10-22
+
+| Command | Result |
+|---|---|
+| `go run ./cmd/migrate up` (00002, 00003 on MariaDB 11.4.13) | applied |
+| `go run ./cmd/seed` twice | seeded; second run is a no-op |
+| `go test ./...` | pass (adds `internal/render`, `internal/catalog`) |
+| `make test-integration` (`-race`) | 26/26 pass (16 from Phases 0–1 + 10 catalogue) |
+| `make lint`, `npm test`, `npm run build`, `make security` | pass / 5/5 / built / 0 reachable vulnerabilities |
+
+| ID | Test | Result |
+|---|---|---|
+| CAT-01 | `TestShortStoryIsOneText` | pass: one entry, no neighbours, story alias 404s for novels |
+| CAT-02 | `TestDatabaseFormatInvariants` | pass: each of 9 invalid writes rejected by its named constraint; a control insert proves the statements are valid. The studio command path arrives in Phase 3. |
+| CAT-03 | `TestNovelTOC` | pass: ordered, drafts/archived excluded, no bodies |
+| CAT-05 | `TestHiddenContentIs404` | pass: draft/archived entries and draft/hidden works return identical 404s with no title/date/body; native API has no content tables |
+| CAT-06 | `TestMarkdownSanitized` + `internal/render` unit tests | pass |
+| CAT-07 | `TestShortStoryIsOneText` | pass: anonymous 200, `public, max-age=60` |
+| PUB-01/02 (partial) | `TestEarlyAccessAndPublicRelease`, `TestUpcomingEntryLocked` | pass: early/upcoming bodies locked for anonymous and verified readers alike (no Patreon yet), `private, no-store` |
+| PUB-04 | `TestEarlyAccessAndPublicRelease` | pass: shifting the clock past `public_at` opens the chapter and story with no worker or job |
+| — | `TestCatalogueFiltersAndCursor`, `TestWorkDetailAndRedirect`, `TestSearchIsSafe` | pass: tag intersection, length filters, signed keyset cursors (tamper/other-sort rejected), redirects, injection-shaped search input |
+
+Manual (Chrome, desktop): home rails, work overview with volume grouping and
+an early badge, chapter reading, → key to the locked chapter (plain-language
+early-access page, no body), contents drawer, short story with no chapter
+numbering, no console errors. A fixture prose generator that repeated
+sentences was fixed for future seeds; the already-seeded dev database keeps
+the old text. Mobile widths remain unverified (window resize unavailable).
+
 ## Phases 0–1 · 2026-10-22
 
 Environment: Linux, go1.26.10 toolchain, Node 22.22.3 / npm 12.0.2, dev

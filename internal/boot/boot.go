@@ -15,6 +15,7 @@ import (
 	"github.com/xmfunew/collar"
 
 	"github.com/namankumar80510/panw.ink/internal/auth"
+	"github.com/namankumar80510/panw.ink/internal/catalog"
 	"github.com/namankumar80510/panw.ink/internal/config"
 	"github.com/namankumar80510/panw.ink/internal/db"
 	"github.com/namankumar80510/panw.ink/internal/redis"
@@ -49,6 +50,9 @@ type Options struct {
 	Logger    *slog.Logger
 	WebFS     fs.FS        // nil → WEB_DIST_DIR in development, else the embedded UI
 	AuthLimit *auth.Limits // nil → auth.DefaultLimits()
+	// Clock replaces time.Now for release decisions (tests). Production
+	// always uses the real clock.
+	Clock func() time.Time
 }
 
 // NewAPI builds Collar, registers every custom route and wraps it.
@@ -99,6 +103,11 @@ func NewAPI(ctx context.Context, cfg *config.Config, opts Options) (*API, error)
 	if err := ah.Mount(routes); err != nil {
 		_ = capp.Close()
 		return nil, fmt.Errorf("boot: mount auth routes: %w", err)
+	}
+	pub := &catalog.Public{DB: capp.DB(), T: t, Now: opts.Clock, CursorKey: cfg.RankingHMACKey}
+	if err := pub.Mount(routes); err != nil {
+		_ = capp.Close()
+		return nil, fmt.Errorf("boot: mount catalogue routes: %w", err)
 	}
 	if err := mountPublic(routes, cfg); err != nil {
 		_ = capp.Close()
